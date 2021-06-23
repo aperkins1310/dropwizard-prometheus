@@ -1,6 +1,7 @@
 package io.prometheus.enhancer;
 
 import javassist.CannotCompileException;
+import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.NotFoundException;
 
@@ -19,5 +20,5 @@ public interface Enhancer {
      * @throws NotFoundException
      * @throws IOException
      */
-    boolean enhance(CtClass ctClass) throws CannotCompileException, NotFoundException, IOException;
+    boolean enhance(ClassPool cp, CtClass ctClass) throws CannotCompileException, NotFoundException, IOException;
 }

@@ -2,6 +2,7 @@ package io.prometheus;
 
 import io.prometheus.enhancer.Enhancer;
 import javassist.ByteArrayClassPath;
+import javassist.ClassClassPath;
 import javassist.ClassPool;
 import javassist.CtClass;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class BaseClassTransformer implements ClassFileTransformer {
         this.classPool.appendSystemPath();
         try {
             this.classPool.appendPathList(System.getProperty("java.class.path"));
+            this.classPool.appendClassPath(new ClassClassPath(this.getClass())); // Without this, later versions of Java don't work!
         } catch (Exception e) {
             logger.error("Error: {}", e);
             throw new RuntimeException("Error: " + e);
@@ -89,7 +91,7 @@ public class BaseClassTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(ClassLoader loader, String fullyQualifiedClassName, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classBytes) throws IllegalClassFormatException {
-        if (skipClass(fullyQualifiedClassName)){
+        if (skipClass(fullyQualifiedClassName)) {
             return null;
         }
 
@@ -98,10 +100,11 @@ public class BaseClassTransformer implements ClassFileTransformer {
 
         try {
             CtClass ctClass = classPool.get(className);
-            if (shouldSkip(className, ctClass)){
+            if (shouldSkip(className, ctClass)) {
                 return null;
             }
-            if (enhancer.enhance(ctClass)) {
+            if (enhancer.enhance(classPool, ctClass)) { // The other important part - need to actually use the class pool we set up here
+                logger.debug("Transformed class {}", className);
                 return ctClass.toBytecode();
             }
             return null;

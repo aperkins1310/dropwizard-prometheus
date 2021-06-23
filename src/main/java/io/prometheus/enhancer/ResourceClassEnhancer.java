@@ -20,26 +20,26 @@ public class ResourceClassEnhancer implements Enhancer {
     private int counter;
 
     @Override
-    public boolean enhance(CtClass ctClass) throws CannotCompileException, NotFoundException, IOException {
+    public boolean enhance(ClassPool cp, CtClass ctClass) throws CannotCompileException, NotFoundException, IOException {
         boolean isClassModified = false;
-        for (CtMethod ctMethod: ctClass.getDeclaredMethods()){
-            if (ctMethod.hasAnnotation(Timed.class)){
+        for (CtMethod ctMethod : ctClass.getDeclaredMethods()) {
+            if (ctMethod.hasAnnotation(Timed.class)) {
                 //add summary
-                addSummary(ctClass, ctMethod);
+                addSummary(cp, ctClass, ctMethod);
                 //add histogram
-                addHistogram(ctClass, ctMethod);
+                addHistogram(cp, ctClass, ctMethod);
                 isClassModified = true;
             }
-            if (ctMethod.hasAnnotation(ExceptionMetered.class)){
+            if (ctMethod.hasAnnotation(ExceptionMetered.class)) {
                 //add uncaught exception counter
                 addExceptionCounter(ctClass, ctMethod);
                 isClassModified = true;
             }
-            if (ctMethod.hasAnnotation(Gauge.class)){
+            if (ctMethod.hasAnnotation(Gauge.class)) {
                 addGauge(ctClass, ctMethod);
                 isClassModified = true;
             }
-            if (ctMethod.hasAnnotation(Counted.class)){
+            if (ctMethod.hasAnnotation(Counted.class)) {
                 addCounter(ctClass, ctMethod);
                 isClassModified = true;
             }
@@ -49,38 +49,41 @@ public class ResourceClassEnhancer implements Enhancer {
 
     /**
      * Add counter
+     *
      * @param ctClass
      * @param ctMethod
      * @throws CannotCompileException
      */
     private void addCounter(CtClass ctClass, CtMethod ctMethod) throws CannotCompileException {
-        final String newCounter = "__counter"+counter++;
+        final String newCounter = "__counter" + counter++;
         ctClass.addField(createCounter(ctClass, ctMethod, newCounter, false));
-        ctMethod.insertBefore(newCounter+".inc();");
+        ctMethod.insertBefore(newCounter + ".inc();");
     }
 
     /**
      * Add gauge
+     *
      * @param ctClass
      * @param ctMethod
      * @throws CannotCompileException
      */
     private void addGauge(CtClass ctClass, CtMethod ctMethod) throws CannotCompileException {
-        final String newGaugeCounter = "__gaugeCounter"+gaugeCounter++;
+        final String newGaugeCounter = "__gaugeCounter" + gaugeCounter++;
         ctClass.addField(createGaugeCounter(ctClass, newGaugeCounter));
         ctMethod.insertBefore(newGaugeCounter + ".labels(\"" + ctMethod.getName() + "\"+)" + ".inc()");
-        ctMethod.insertBefore(newGaugeCounter+".labels(\""+ctMethod.getName()+"\"+)"+".dec()");
+        ctMethod.insertBefore(newGaugeCounter + ".labels(\"" + ctMethod.getName() + "\"+)" + ".dec()");
     }
 
     /**
      * Add uncaught exception counter
+     *
      * @param ctClass
      * @param ctMethod
      * @throws CannotCompileException
      * @throws NotFoundException
      */
     private void addExceptionCounter(CtClass ctClass, CtMethod ctMethod) throws CannotCompileException, NotFoundException {
-        final String newExceptionCounter = "__exceptionCounter"+exceptionCounter++;
+        final String newExceptionCounter = "__exceptionCounter" + exceptionCounter++;
         ctClass.addField(createCounter(ctClass, ctMethod, newExceptionCounter, true));
         ctMethod.addCatch("{" +
                 newExceptionCounter + ".inc();" +
@@ -90,36 +93,37 @@ public class ResourceClassEnhancer implements Enhancer {
 
     /**
      * Add summary timer to the method
+     *
      * @param ctClass
      * @param ctMethod
      * @throws CannotCompileException
      * @throws NotFoundException
      */
-    private void addSummary(CtClass ctClass, CtMethod ctMethod) throws CannotCompileException, NotFoundException {
-        final String newSummaryField = "__summary"+summaryCounter++;
+    private void addSummary(ClassPool cp, CtClass ctClass, CtMethod ctMethod) throws CannotCompileException, NotFoundException {
+        final String newSummaryField = "__summary" + summaryCounter++;
         ctClass.addField(createSummary(ctClass, ctMethod, newSummaryField));
-        ctMethod.addLocalVariable("__requestSummaryTimer", ClassPool.getDefault().get("io.prometheus.client.Summary$Timer"));
+        ctMethod.addLocalVariable("__requestSummaryTimer", cp.get("io.prometheus.client.Summary$Timer"));
         ctMethod.insertBefore("__requestSummaryTimer = " + newSummaryField + ".startTimer();");
         ctMethod.insertAfter("__requestSummaryTimer.observeDuration();");
     }
 
     /**
      * Add histogram timer to the method
+     *
      * @param ctClass
      * @param ctMethod
      * @throws CannotCompileException
      * @throws NotFoundException
      */
-    private void addHistogram(CtClass ctClass, CtMethod ctMethod) throws CannotCompileException, NotFoundException {
-        final String newHistogramNameField = "__histogram"+histogramCounter++;
+    private void addHistogram(ClassPool cp, CtClass ctClass, CtMethod ctMethod) throws CannotCompileException, NotFoundException {
+        final String newHistogramNameField = "__histogram" + histogramCounter++;
         ctClass.addField(createHistogram(ctClass, ctMethod, newHistogramNameField));
-        ctMethod.addLocalVariable("__requestHistogramTimer", ClassPool.getDefault().get("io.prometheus.client.Histogram$Timer"));
-        ctMethod.insertBefore("__requestHistogramTimer = "+newHistogramNameField+".startTimer();");
+        ctMethod.addLocalVariable("__requestHistogramTimer", cp.get("io.prometheus.client.Histogram$Timer"));
+        ctMethod.insertBefore("__requestHistogramTimer = " + newHistogramNameField + ".startTimer();");
         ctMethod.insertAfter("__requestHistogramTimer.observeDuration();");
     }
 
     /**
-     *
      * @param ctClass
      * @param ctMethod
      * @param fieldName
@@ -128,12 +132,12 @@ public class ResourceClassEnhancer implements Enhancer {
      */
     private CtField createCounter(CtClass ctClass, CtMethod ctMethod, String fieldName, boolean exception) throws CannotCompileException {
         if (!exception)
-            return CtField.make("private static final io.prometheus.client.Counter "  + fieldName + "=" + "io.prometheus.core.MetricsHelper.getCounter(\"" + ctClass.getName() + "." + ctMethod.getName() + ".counter" + "\");", ctClass);
-        else return CtField.make("private static final io.prometheus.client.Counter "  + fieldName + "=" + "io.prometheus.core.MetricsHelper.getCounter(\"" + ctClass.getName() + "." + ctMethod.getName() + ".counter.exception" + "\");", ctClass);
+            return CtField.make("private static final io.prometheus.client.Counter " + fieldName + "=" + "io.prometheus.core.MetricsHelper.getCounter(\"" + ctClass.getName() + "." + ctMethod.getName() + ".counter" + "\");", ctClass);
+        else
+            return CtField.make("private static final io.prometheus.client.Counter " + fieldName + "=" + "io.prometheus.core.MetricsHelper.getCounter(\"" + ctClass.getName() + "." + ctMethod.getName() + ".counter.exception" + "\");", ctClass);
     }
 
     /**
-     *
      * @param ctClass
      * @param ctMethod
      * @param fieldName
@@ -141,11 +145,10 @@ public class ResourceClassEnhancer implements Enhancer {
      * @throws CannotCompileException
      */
     private CtField createHistogram(CtClass ctClass, CtMethod ctMethod, String fieldName) throws CannotCompileException {
-        return CtField.make("private static final io.prometheus.client.Histogram "  + fieldName + "=" + "io.prometheus.core.MetricsHelper.getHistogram(\"" + ctClass.getName() + "." + ctMethod.getName() + ".histogram.timer" + "\");", ctClass);
+        return CtField.make("private static final io.prometheus.client.Histogram " + fieldName + "=" + "io.prometheus.core.MetricsHelper.getHistogram(\"" + ctClass.getName() + "." + ctMethod.getName() + ".histogram.timer" + "\");", ctClass);
     }
 
     /**
-     *
      * @param ctClass
      * @param ctMethod
      * @param fieldName
@@ -154,17 +157,16 @@ public class ResourceClassEnhancer implements Enhancer {
      * @throws CannotCompileException
      */
     private CtField createSummary(CtClass ctClass, CtMethod ctMethod, String fieldName) throws NotFoundException, CannotCompileException {
-        return CtField.make("private static final io.prometheus.client.Summary "  + fieldName + "=" + "io.prometheus.core.MetricsHelper.getSummary(\"" + ctClass.getName() + "." + ctMethod.getName() + ".summary.timer" + "\");", ctClass);
+        return CtField.make("private static final io.prometheus.client.Summary " + fieldName + "=" + "io.prometheus.core.MetricsHelper.getSummary(\"" + ctClass.getName() + "." + ctMethod.getName() + ".summary.timer" + "\");", ctClass);
     }
 
     /**
-     *
      * @param ctClass
      * @param fieldName
      * @return
      * @throws CannotCompileException
      */
     private CtField createGaugeCounter(CtClass ctClass, String fieldName) throws CannotCompileException {
-        return CtField.make("private static final io.prometheus.client.Gauge "  + fieldName + "=" + "io.prometheus.core.MetricsHelper.getGauge(\"" + ctClass.getName() + ".gauge" + "\");", ctClass);
+        return CtField.make("private static final io.prometheus.client.Gauge " + fieldName + "=" + "io.prometheus.core.MetricsHelper.getGauge(\"" + ctClass.getName() + ".gauge" + "\");", ctClass);
     }
 }

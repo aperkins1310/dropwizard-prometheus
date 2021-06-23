@@ -52,7 +52,6 @@ public class DPAgent {
 
         //start the prometheus reporter
         startPrometheusReporter(prometheusReporter, prometheusListenerPort);
-
     }
 
     /**
